@@ -1,0 +1,12 @@
+package tonyfettes:gymnasium;
+
+world trainer {
+  import gymnasium: interface {
+    resource space {
+      reset: func(seed: u32) -> list<f64>;
+      step: func(action: list<f64>) -> tuple<list<f64>, bool>;
+      close: func();
+    }
+    make: func(name: string) -> space;
+  }
+}
