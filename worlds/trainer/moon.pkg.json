@@ -1,1 +1,5 @@
-{ }
+{
+  "import": [
+    "tonyfettes/gymnasium/interface/imports/gymnasium"
+  ]
+}

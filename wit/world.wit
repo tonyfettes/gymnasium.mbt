@@ -9,4 +9,6 @@ world trainer {
     }
     make: func(name: string) -> space;
   }
+
+  export run: func();
 }
