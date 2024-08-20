@@ -1,22 +1,11 @@
+
 {
-  "link": {
-    "wasm": {
-      "exports": [
-        "cabi_realloc:cabi_realloc",
-        "wasmExportRun:run"
-      ],
-      "export-memory-name": "memory",
-      "heap-start-address": 16
-    }
-  },
-  "import": [
-    {
-      "path": "tonyfettes/gymnasium/ffi",
-      "alias": "ffi"
-    },
-    {
-      "path": "tonyfettes/gymnasium/worlds/trainer",
-      "alias": "trainer"
-    }
-  ]
+      "link": {
+            "wasm": {
+                  "exports": ["cabi_realloc:cabi_realloc", "wasmExportRun:run"],
+                  "export-memory-name": "memory",
+                  "heap-start-address": 16
+            }
+      }
+      ,"import": [{ "path" : "tonyfettes/python/ffi", "alias" : "ffi" }, { "path" : "tonyfettes/python/worlds/main", "alias" : "main" }]
 }

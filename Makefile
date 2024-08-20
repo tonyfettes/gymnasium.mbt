@@ -1,15 +1,25 @@
 .PHONY: default target/wasm/release/build/gen/gen.wat
 
-default: trainer
+WIT = wit/world.wit
+WAT = target/wasm/release/build/gen/gen.wat
 
-target/wasm/release/build/gen/gen.wat:
+default: main
+
+ffi gen interface worlds &: $(WIT)
+	wit-bindgen moonbit wit --out-dir . --derive-show --derive-eq --ignore-stub
+	moon fmt
+
+$(WAT):
 	moon build --target wasm --output-wat
 
-target/wasm/release/build/gen/gen.wasm: wit/world.wit target/wasm/release/build/gen/gen.wat
-	wasm-tools component embed $^ -o $@ --encoding utf16
+target/wasm/release/build/gen/gen.embedded.wasm: $(WIT) $(WAT)
+	wasm-tools component embed $(WIT) $(WAT) -o $@ --encoding utf16
 
-target/wasm/release/build/gen/gen.component.wasm: target/wasm/release/build/gen/gen.wasm
+target/wasm/release/build/gen/gen.component.wasm: target/wasm/release/build/gen/gen.embedded.wasm
 	wasm-tools component new $< -o $@
 
-trainer: target/wasm/release/build/gen/gen.component.wasm
-	.venv/bin/python3.11 -m wasmtime.bindgen $< --out-dir $@
+target/wasm/release/build/gen/gen.component.wat: target/wasm/release/build/gen/gen.component.wasm
+	wasm-tools print $< > $@
+
+main: target/wasm/release/build/gen/gen.component.wasm
+	python3 -m wasmtime.bindgen $< --out-dir $@

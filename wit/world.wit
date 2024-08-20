@@ -1,14 +1,52 @@
-package tonyfettes:gymnasium;
+package tonyfettes:python;
 
-world trainer {
-  import gymnasium: interface {
-    resource space {
-      reset: func(seed: u32) -> list<f64>;
-      step: func(action: list<f64>) -> tuple<list<f64>, bool>;
-      close: func();
-    }
-    make: func(name: string) -> space;
+interface python {
+  type bytes = list<u8>;
+  print: func(message: bytes);
+}
+
+interface math {
+  exp: func(x: f64) -> f64;
+  log: func(x: f64) -> f64;
+}
+
+interface gymnasium {
+  use python.{bytes};
+
+  record discrete {
+    id: u32,
+    n: u32,
   }
 
+  discrete-sample: func(discrete: discrete) -> u32;
+
+  record frozen-lake {
+    id: u32,
+    action-space: discrete,
+    observation-space: discrete,
+  }
+
+  record frozen-lake-info {
+    prob: f64,
+  }
+
+  frozen-lake-make: func(render-mode: bytes, is-slippery: bool) -> frozen-lake;
+  frozen-lake-reset: func(env: frozen-lake, seed: option<u32>) -> tuple<s32, frozen-lake-info>;
+  frozen-lake-step: func(env: frozen-lake, action: u32) -> tuple<s32, f64, bool, frozen-lake-info>;
+
+  record lunar-lander {
+    id: u32,
+    action-space: discrete,
+  }
+
+  lunar-lander-make: func(render-mode: bytes) -> u32;
+  lunar-lander-reset: func(env: lunar-lander, seed: option<u32>) -> list<f64>;
+  lunar-lander-step: func(env: lunar-lander, action: u32) -> tuple<list<f64>, f64, bool>;
+}
+
+world main {
+  import python;
+  import math;
+  import gymnasium;
   export run: func();
 }
