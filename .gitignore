@@ -1,4 +1,5 @@
 target/
 .mooncakes/
 .venv/
-/trainer/
+__pycache__/
+/main/

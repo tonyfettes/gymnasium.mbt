@@ -36,7 +36,7 @@ class HostGymnasium(imports.HostGymnasium):
         )
 
     def frozen_lake_reset(
-        self, env: imports.gymnasium.FrozenLake, seed: int
+        self, env: imports.gymnasium.FrozenLake, seed: int | None
     ) -> Tuple[int, imports.gymnasium.FrozenLakeInfo]:
         observation, info = self.environments[env.id].reset(seed=seed)
         return observation, imports.gymnasium.FrozenLakeInfo(prob=info["prob"])
