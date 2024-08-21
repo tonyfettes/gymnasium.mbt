@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "gymnasium.mbt"
 version = "0.0.1"
 dependencies = [
-  "gymnasium",
+  "gymnasium[all]",
   "wasmtime",
 ]
 
