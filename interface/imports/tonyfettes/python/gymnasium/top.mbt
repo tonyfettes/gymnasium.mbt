@@ -28,7 +28,28 @@ pub fn discrete_sample(discrete : Discrete) -> UInt {
   return result.to_uint()
 }
 
-pub fn frozen_lake_make(render_mode : Bytes, is_slippery : Bool) -> FrozenLake {
+pub fn frozen_lake_make(
+  render_mode : Bytes,
+  is_slippery : Bool,
+  desc : Array[Bytes]?
+) -> FrozenLake {
+  let cleanupList : Array[@ffi.Cleanup] = []
+  let ignoreList : Array[@ffi.Any] = []
+  let (lowered, lowered5, lowered6) = match desc {
+    None => (0, 0, 0)
+    Some(payload2) => {
+      let address = @ffi.malloc(payload2.length() * 8)
+      for index = 0; index < payload2.length(); index = index + 1 {
+        let element3 : Bytes = payload2[index]
+        let base4 = address + index * 8
+        @ffi.store32(base4 + 4, element3.length())
+        @ffi.store32(base4 + 0, @ffi.bytes2ptr(element3))
+        ignoreList.push(element3)
+      }
+      cleanupList.push({ address, size: payload2.length() * 8, align: 4 })
+      (1, address, payload2.length())
+    }
+  }
   let return_area = @ffi.malloc(20)
   wasmImportFrozenLakeMake(
     @ffi.bytes2ptr(render_mode),
@@ -38,10 +59,15 @@ pub fn frozen_lake_make(render_mode : Bytes, is_slippery : Bool) -> FrozenLake {
     } else {
       0
     },
+    lowered,
+    lowered5,
+    lowered6,
     return_area,
   )
   ignore(render_mode)
   @ffi.free(return_area)
+  cleanupList.each(fn(cleanup) { @ffi.free(cleanup.address) })
+  ignore(ignoreList)
   return FrozenLake::{
     id: @ffi.load32(return_area + 0).to_uint(),
     action_space: Discrete::{

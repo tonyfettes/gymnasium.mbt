@@ -30,7 +30,7 @@ interface gymnasium {
     prob: f64,
   }
 
-  frozen-lake-make: func(render-mode: bytes, is-slippery: bool) -> frozen-lake;
+  frozen-lake-make: func(render-mode: bytes, is-slippery: bool, desc: option<list<bytes>>) -> frozen-lake;
   frozen-lake-reset: func(env: frozen-lake, seed: option<u32>) -> tuple<s32, frozen-lake-info>;
   frozen-lake-step: func(env: frozen-lake, action: u32) -> tuple<s32, f64, bool, frozen-lake-info>;
 

@@ -115,9 +115,7 @@ fn print_trajectory(self : Q, state : Int) -> Unit {
   @python.print("trajectory:".to_bytes())
   loop self.trajectory[:], state {
     [(origin, action), .. as trajectory], state => {
-      @python.print(
-        "origin: \{origin} --(\{action})-> state: \{state}".to_bytes(),
-      )
+      @python.print("  \{origin} --(\{action})-> \{state}".to_bytes())
       continue trajectory, state
     }
     [], _ => ()
@@ -127,6 +125,7 @@ fn print_trajectory(self : Q, state : Int) -> Unit {
 fn Q::update_reward(self : Q, state : Int, reward : Double) -> Unit {
   debug("learning_rate", self.learning_rate)
   debug("epsilon", self.epsilon.epsilon)
+  debug("reward", reward)
   self.print_trajectory(state)
   loop self.trajectory[:], state {
     [(origin, action), .. as trajectory], state => {
@@ -147,24 +146,93 @@ fn Q::update_reward(self : Q, state : Int, reward : Double) -> Unit {
   self.trajectory.clear()
 }
 
+struct ForzenLake {
+  map : Array[String]
+  env : @gymnasium.FrozenLake
+}
+
+fn observation_space(self : ForzenLake) -> @gymnasium.Discrete {
+  self.env.observation_space
+}
+
+fn action_space(self : ForzenLake) -> @gymnasium.Discrete {
+  self.env.action_space
+}
+
+fn ForzenLake::new(
+  ~is_slippery : Bool = false,
+  ~render_mode : String = "human",
+  ~map? : Array[String]
+) -> ForzenLake {
+  let desc = match map {
+    None => None
+    Some(map) => Some(map.map(fn(row) { row.to_bytes() }))
+  }
+  return ForzenLake::{
+    env: @gymnasium.frozen_lake_make(render_mode.to_bytes(), is_slippery, desc),
+    map: match map {
+      None => ["SFFF", "FHFH", "FFFH", "HFFG"]
+      Some(map) => map
+    },
+  }
+}
+
+fn ForzenLake::get_map(self : ForzenLake, state : Int) -> Char {
+  let mut state = state
+  for row in self.map {
+    if state < row.length() {
+      return row[state]
+    }
+    state -= row.length()
+  } else {
+    abort("Invalid state: \{state}")
+  }
+}
+
+fn ForzenLake::reset(
+  self : ForzenLake,
+  seed : UInt?
+) -> (Int, @gymnasium.FrozenLakeInfo) {
+  @gymnasium.frozen_lake_reset(self.env, seed)
+}
+
+fn ForzenLake::step(
+  self : ForzenLake,
+  action : UInt
+) -> (Int, Double, Bool, @gymnasium.FrozenLakeInfo) {
+  let (observation, reward, terminated, info) = @gymnasium.frozen_lake_step(
+    self.env,
+    action,
+  )
+  let reward = match self.get_map(observation) {
+    'H' => -1.0
+    'F' => -0.01
+    'S' => -0.01
+    _ => reward
+  }
+  return (observation, reward, terminated, info)
+}
+
 pub fn run() -> Unit {
-  let env = @gymnasium.frozen_lake_make("human".to_bytes(), false)
+  let env = ForzenLake::new(
+    render_mode="human",
+    is_slippery=false,
+    map=["SFFF", "FHFH", "FFFH", "HFFG"],
+  )
   let agent = Q::new(
-    observation_space=env.observation_space.n.to_int(),
-    action_space=env.action_space.n.to_int(),
-    seed=42,
+    observation_space=env.observation_space().n.to_int(),
+    action_space=env.action_space().n.to_int(),
+    seed=43,
     epsilon=Epsilon::new(epsilon=1.0, bias=0.10, decay=0.999),
     learning_rate=1.0,
     discount_factor=0.99,
   )
   for episode = 0; episode < 100; episode = episode + 1 {
-    let (observation, _) = @gymnasium.frozen_lake_reset(env, None)
+    let (observation, _) = env.reset(None)
     loop observation {
       observation => {
         let action = agent.sample_action(observation)
-        let (observation, reward, terminated, _) = @gymnasium.frozen_lake_step(
-          env, action,
-        )
+        let (observation, reward, terminated, _) = env.step(action)
         agent.update_reward(observation, reward)
         if terminated {
           break

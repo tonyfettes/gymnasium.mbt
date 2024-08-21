@@ -1,6 +1,6 @@
 from main import Root, RootImports, imports
 import gymnasium as gym
-from typing import Any, List, Tuple
+from typing import Any, List, Tuple, Optional
 import wasmtime
 import numpy
 
@@ -17,12 +17,15 @@ class HostGymnasium(imports.HostGymnasium):
         self.spaces = []
 
     def frozen_lake_make(
-        self, render_mode: bytes, is_slippery: bool
+        self, render_mode: bytes, is_slippery: bool, desc: Optional[List[bytes]]
     ) -> imports.gymnasium.FrozenLake:
         env_id = len(self.environments)
         render_mode_str = render_mode.decode("utf-16")
+        desc_str = None
+        if desc is not None:
+            desc_str = [d.decode("utf-16") for d in desc]
         env: gym.Env[gym.spaces.Discrete, gym.spaces.Discrete] = gym.make(
-            "FrozenLake-v1", render_mode=render_mode_str, is_slippery=is_slippery
+            "FrozenLake-v1", render_mode=render_mode_str, is_slippery=is_slippery, desc=desc_str
         )
         self.environments.append(env)
         action_space_id = len(self.spaces)
