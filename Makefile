@@ -1,7 +1,7 @@
-.PHONY: default target/wasm/release/build/gen/gen.wat
-
 WIT = wit/world.wit
 WAT = target/wasm/release/build/gen/gen.wat
+
+.PHONY: default $(WAT) clean run
 
 default: main
 
@@ -23,3 +23,9 @@ target/wasm/release/build/gen/gen.component.wat: target/wasm/release/build/gen/g
 
 main: target/wasm/release/build/gen/gen.component.wasm
 	python3 -m wasmtime.bindgen $< --out-dir $@
+
+clean:
+	rm -rf ffi gen interface target
+
+run: main main.py
+	python3 main.py
