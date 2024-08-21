@@ -1,7 +1,7 @@
 WIT = wit/world.wit
-WAT = target/wasm/release/build/gen/gen.wat
+WASM = target/wasm/release/build/gen/gen.wasm
 
-.PHONY: default $(WAT) clean run
+.PHONY: default $(WASM) clean run
 
 default: main
 
@@ -9,11 +9,11 @@ ffi gen interface worlds &: $(WIT)
 	wit-bindgen moonbit wit --out-dir . --derive-show --derive-eq --ignore-stub
 	moon fmt
 
-$(WAT):
-	moon build --target wasm --output-wat
+$(WASM):
+	moon build --target wasm
 
-target/wasm/release/build/gen/gen.embedded.wasm: $(WIT) $(WAT)
-	wasm-tools component embed $(WIT) $(WAT) -o $@ --encoding utf16
+target/wasm/release/build/gen/gen.embedded.wasm: $(WIT) $(WASM)
+	wasm-tools component embed $(WIT) $(WASM) -o $@ --encoding utf16
 
 target/wasm/release/build/gen/gen.component.wasm: target/wasm/release/build/gen/gen.embedded.wasm
 	wasm-tools component new $< -o $@
