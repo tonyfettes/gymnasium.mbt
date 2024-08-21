@@ -1,54 +1,66 @@
+enum EpsilonPolicy {
+  Explore
+  Exploit
+}
+
+struct Epsilon {
+  mut epsilon : Double
+  bias : Double
+  decay : Double
+}
+
+fn Epsilon::new(~epsilon : Double, ~bias : Double, ~decay : Double) -> Epsilon {
+  Epsilon::{ epsilon, bias, decay }
+}
+
+fn Epsilon::sample(
+  self : Epsilon,
+  random_state : @random.RandomState
+) -> EpsilonPolicy {
+  if @random.gen_double(random_state) < self.epsilon {
+    EpsilonPolicy::Explore
+  } else {
+    EpsilonPolicy::Exploit
+  }
+}
+
+fn Epsilon::update(self : Epsilon) -> Unit {
+  self.epsilon = (self.epsilon - self.bias) * self.decay + self.bias
+}
+
 struct Q {
   action_space : Int
   random_state : @random.RandomState
   table : Array[Array[Double]]
-  mut epsilon : Double
-  epsilon_decay : Double
+  epsilon : Epsilon
   learning_rate : Double
   discount_factor : Double
+  trajectory : Array[(Int, UInt)]
 }
 
 fn Q::new(
   ~observation_space : Int,
   ~action_space : Int,
   ~seed : Int,
-  ~epsilon : Double,
-  ~epsilon_decay : Double,
+  ~epsilon : Epsilon,
   ~learning_rate : Double,
   ~discount_factor : Double
 ) -> Q {
   let random_state = @random.init_state(~seed)
   let table = Array::makei(
     observation_space,
-    fn(_i) { Array::make(action_space, 0.5) },
+    fn(_i) { Array::make(action_space, 0.0) },
   )
+  let trajectory = []
   Q::{
     random_state,
     action_space,
     table,
     epsilon,
-    epsilon_decay,
     learning_rate,
     discount_factor,
+    trajectory,
   }
-}
-
-fn random_sample(
-  random_state : @random.RandomState,
-  distribution : Array[Double]
-) -> Int {
-  let mut sum = 0.0
-  for p in distribution {
-    sum = sum + p + 1.0
-  }
-  let mut value = @random.gen_double(random_state) / 2.0 * sum
-  for i = 0; i < distribution.length(); i = i + 1 {
-    value = value - distribution[i]
-    if value < 0 {
-      return i
-    }
-  }
-  return distribution.length() - 1
 }
 
 fn argmax[T : Compare](array : Array[T]) -> Int {
@@ -74,41 +86,65 @@ fn max[T : Compare](array : Array[T]) -> T {
 }
 
 fn Q::sample_action(self : Q, state : Int) -> UInt {
-  {
-    let table = self.table
-    @python.print("\{table}".to_bytes())
+  let action = match self.epsilon.sample(self.random_state) {
+    EpsilonPolicy::Explore =>
+      (@random.gen_int(self.random_state) % self.action_space).to_uint()
+    EpsilonPolicy::Exploit => argmax(self.table[state]).to_uint()
   }
-  if @random.gen_double(self.random_state) / 2.0 < self.epsilon {
-    @python.print("explore".to_bytes())
-    return (@random.gen_int(self.random_state) % self.action_space).to_uint()
-  }
-  @python.print("exploit".to_bytes())
-  random_sample(self.random_state, self.table[state]).to_uint()
+  self.trajectory.push((state, action))
+  return action
 }
 
-fn Q::update_reward(
-  self : Q,
-  state : Int,
-  action : UInt,
-  result : Int,
-  reward : Double
-) -> Unit {
-  let action = action.to_int()
-  let old_value = self.table[state][action]
-  self.table[state][action] = self.table[state][action] +
-    self.learning_rate *
-    (
-      reward +
-      self.discount_factor * max(self.table[result]) -
-      self.table[state][action]
-    )
-  let new_value = self.table[state][action]
-  @python.print(
-    "updating table[\{state}][\{action}] from \{old_value} to \{new_value}".to_bytes(),
-  )
-  self.epsilon = self.epsilon * self.epsilon_decay
-  let epsilon = self.epsilon
-  @python.print("epsilon: \{epsilon}".to_bytes())
+fn print_table(table : Array[Array[Double]]) -> Unit {
+  for i, row in table {
+    if i == 0 {
+      @python.print("[\{row}".to_bytes())
+    } else if i == table.length() - 1 {
+      @python.print(" \{row}]".to_bytes())
+    } else {
+      @python.print(" \{row},".to_bytes())
+    }
+  }
+}
+
+fn debug[T : Show](label : String, value : T) -> Unit {
+  @python.print("\{label}: \{value}".to_bytes())
+}
+
+fn print_trajectory(self : Q, state : Int) -> Unit {
+  @python.print("trajectory:".to_bytes())
+  loop self.trajectory[:], state {
+    [(origin, action), .. as trajectory], state => {
+      @python.print(
+        "origin: \{origin} --(\{action})-> state: \{state}".to_bytes(),
+      )
+      continue trajectory, state
+    }
+    [], _ => ()
+  }
+}
+
+fn Q::update_reward(self : Q, state : Int, reward : Double) -> Unit {
+  debug("learning_rate", self.learning_rate)
+  debug("epsilon", self.epsilon.epsilon)
+  self.print_trajectory(state)
+  loop self.trajectory[:], state {
+    [(origin, action), .. as trajectory], state => {
+      self.table[origin][action.to_int()] = self.table[origin][action.to_int()] +
+        self.learning_rate *
+        (
+          reward +
+          self.discount_factor * max(self.table[state]) -
+          self.table[origin][action.to_int()]
+        )
+      continue trajectory, state
+    }
+    [], _ => ()
+  }
+  self.epsilon.update()
+  let table = self.table
+  print_table(table)
+  self.trajectory.clear()
 }
 
 pub fn run() -> Unit {
@@ -117,28 +153,23 @@ pub fn run() -> Unit {
     observation_space=env.observation_space.n.to_int(),
     action_space=env.action_space.n.to_int(),
     seed=42,
-    epsilon=1.0,
-    epsilon_decay=0.99,
+    epsilon=Epsilon::new(epsilon=1.0, bias=0.10, decay=0.999),
     learning_rate=1.0,
     discount_factor=0.99,
   )
   for episode = 0; episode < 100; episode = episode + 1 {
-    let (init_observation, _) = @gymnasium.frozen_lake_reset(env, None)
-    let mut last_observation = init_observation
-    for tick = 0; tick < 1024; tick = tick + 1 {
-      let action = agent.sample_action(last_observation)
-      @python.print("action: \{action}".to_bytes())
-      let (next_observation, reward, terminated, _) = @gymnasium.frozen_lake_step(
-        env, action,
-      )
-      let reward = if reward == 0.0 { -0.01 } else { reward }
-      @python.print(
-        "observation: \{next_observation}, reward: \{reward}".to_bytes(),
-      )
-      agent.update_reward(last_observation, action, next_observation, reward)
-      last_observation = next_observation
-      if terminated {
-        break
+    let (observation, _) = @gymnasium.frozen_lake_reset(env, None)
+    loop observation {
+      observation => {
+        let action = agent.sample_action(observation)
+        let (observation, reward, terminated, _) = @gymnasium.frozen_lake_step(
+          env, action,
+        )
+        agent.update_reward(observation, reward)
+        if terminated {
+          break
+        }
+        continue observation
       }
     }
   }
