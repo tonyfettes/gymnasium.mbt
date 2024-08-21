@@ -4,20 +4,20 @@ enum EpsilonPolicy {
 }
 
 struct Epsilon {
-  mut epsilon : Double
+  mut value : Double
   bias : Double
   decay : Double
 }
 
-fn Epsilon::new(~epsilon : Double, ~bias : Double, ~decay : Double) -> Epsilon {
-  Epsilon::{ epsilon, bias, decay }
+fn Epsilon::new(value : Double, ~bias : Double = 0, ~decay : Double) -> Epsilon {
+  Epsilon::{ value, bias, decay }
 }
 
 fn Epsilon::sample(
   self : Epsilon,
   random_state : @random.RandomState
 ) -> EpsilonPolicy {
-  if @random.gen_double(random_state) < self.epsilon {
+  if @random.gen_double(random_state) < self.value {
     EpsilonPolicy::Explore
   } else {
     EpsilonPolicy::Exploit
@@ -25,7 +25,7 @@ fn Epsilon::sample(
 }
 
 fn Epsilon::update(self : Epsilon) -> Unit {
-  self.epsilon = (self.epsilon - self.bias) * self.decay + self.bias
+  self.value = (self.value - self.bias) * self.decay + self.bias
 }
 
 struct Q {
@@ -49,7 +49,7 @@ fn Q::new(
   let random_state = @random.init_state(~seed)
   let table = Array::makei(
     observation_space,
-    fn(_i) { Array::make(action_space, 0.0) },
+    fn(_i) { Array::make(action_space, 0.5) },
   )
   let trajectory = []
   Q::{
@@ -85,12 +85,28 @@ fn max[T : Compare](array : Array[T]) -> T {
   max_value
 }
 
-fn Q::sample_action(self : Q, state : Int) -> UInt {
-  let action = match self.epsilon.sample(self.random_state) {
-    EpsilonPolicy::Explore =>
-      (@random.gen_int(self.random_state) % self.action_space).to_uint()
-    EpsilonPolicy::Exploit => argmax(self.table[state]).to_uint()
+fn random_sample(random_state: @random.RandomState, array : Array[Double]) -> Int {
+  let mut sum = 0.0
+  for value in array {
+    sum = sum + value
   }
+  let mut random_value = @random.gen_double(random_state) / 2.0 * sum
+  for i, value in array {
+    random_value = random_value - value
+    if random_value < 0 {
+      return i
+    }
+  }
+  abort("Invalid random value")
+}
+
+fn Q::sample_action(self : Q, state : Int) -> UInt {
+  // let action = match self.epsilon.sample(self.random_state) {
+  //   EpsilonPolicy::Explore =>
+  //     (@random.gen_int(self.random_state) % self.action_space).to_uint()
+  //   EpsilonPolicy::Exploit => argmax(self.table[state]).to_uint()
+  // }
+  let action = random_sample(self.random_state, self.table[state]).to_uint()
   self.trajectory.push((state, action))
   return action
 }
@@ -124,7 +140,7 @@ fn print_trajectory(self : Q, state : Int) -> Unit {
 
 fn Q::update_reward(self : Q, state : Int, reward : Double) -> Unit {
   debug("learning_rate", self.learning_rate)
-  debug("epsilon", self.epsilon.epsilon)
+  debug("epsilon", self.epsilon.value)
   debug("reward", reward)
   self.print_trajectory(state)
   loop self.trajectory[:], state {
@@ -213,19 +229,27 @@ fn ForzenLake::step(
   return (observation, reward, terminated, info)
 }
 
+pub fn power(base : Double, exp : Int) -> Double {
+  let mut result = 1.0
+  for _i = 0; _i < exp; _i = _i + 1 {
+    result = result * base
+  }
+  result
+}
+
 pub fn run() -> Unit {
-  let env = ForzenLake::new(
-    render_mode="human",
-    is_slippery=false,
-    map=["SFFF", "FHFH", "FFFH", "HFFG"],
-  )
+  let map = [
+    "SFFFFFFF", "FFFFFFFF", "FFFHFFFF", "FFFFFHFF", "FFFHFFFF", "FHHFFFHF", "FHFFHFHF",
+    "FFFHFFFG",
+  ]
+  let env = ForzenLake::new(render_mode="human", is_slippery=false, ~map)
   let agent = Q::new(
     observation_space=env.observation_space().n.to_int(),
     action_space=env.action_space().n.to_int(),
     seed=43,
-    epsilon=Epsilon::new(epsilon=1.0, bias=0.10, decay=0.999),
+    epsilon=Epsilon::new(1.0, decay=1.0 - power(0.5, map.length())),
     learning_rate=1.0,
-    discount_factor=0.99,
+    discount_factor=0.95,
   )
   for episode = 0; episode < 100; episode = episode + 1 {
     let (observation, _) = env.reset(None)
