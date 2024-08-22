@@ -1,1 +1,8 @@
-{ "name": "tonyfettes/python" }
+{
+  "name": "tonyfettes/python",
+  "deps": {
+    "tonyfettes/torch": {
+      "path": "/Users/haoxiang/Workspace/moonbit/feihaoxiang/torch.mbt"
+    }
+  }
+}

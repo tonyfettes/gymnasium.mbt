@@ -32,7 +32,7 @@ fn wasmImportFrozenLakeStep(
   p6 : Int
 ) = "tonyfettes:python/gymnasium" "frozen-lake-step"
 
-fn wasmImportLunarLanderMake(p0 : Int, p1 : Int) -> Int = "tonyfettes:python/gymnasium" "lunar-lander-make"
+fn wasmImportLunarLanderMake(p0 : Int, p1 : Int, p2 : Int) = "tonyfettes:python/gymnasium" "lunar-lander-make"
 
 fn wasmImportLunarLanderReset(
   p0 : Int,
@@ -40,7 +40,19 @@ fn wasmImportLunarLanderReset(
   p2 : Int,
   p3 : Int,
   p4 : Int,
-  p5 : Int
+  p5 : Int,
+  p6 : Int,
+  p7 : Int,
+  p8 : Int
 ) = "tonyfettes:python/gymnasium" "lunar-lander-reset"
 
-fn wasmImportLunarLanderStep(p0 : Int, p1 : Int, p2 : Int, p3 : Int, p4 : Int) = "tonyfettes:python/gymnasium" "lunar-lander-step"
+fn wasmImportLunarLanderStep(
+  p0 : Int,
+  p1 : Int,
+  p2 : Int,
+  p3 : Int,
+  p4 : Int,
+  p5 : Int,
+  p6 : Int,
+  p7 : Int
+) = "tonyfettes:python/gymnasium" "lunar-lander-step"

@@ -1,6 +1,7 @@
 {
   "import": [
-    "tonyfettes/python/interface/imports/tonyfettes/python/python",
-    "tonyfettes/python/interface/imports/tonyfettes/python/gymnasium"
+    "tonyfettes/python/interface/imports/tonyfettes/python/gymnasium",
+    "tonyfettes/torch",
+    "tonyfettes/python/interface/imports/tonyfettes/python/python"
   ]
 }

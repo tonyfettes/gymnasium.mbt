@@ -1,5 +1,5 @@
 WIT = wit/world.wit
-WASM = target/wasm/release/build/gen/gen.wasm
+WASM = target/wasm/debug/build/gen/gen.wasm
 
 .PHONY: default $(WASM) clean run
 
@@ -10,18 +10,18 @@ ffi gen interface worlds &: $(WIT)
 	moon fmt
 
 $(WASM):
-	moon build --target wasm
+	moon build --target wasm -g
 
-target/wasm/release/build/gen/gen.embedded.wasm: $(WIT) $(WASM)
+target/wasm/debug/build/gen/gen.embedded.wasm: $(WIT) $(WASM)
 	wasm-tools component embed $(WIT) $(WASM) -o $@ --encoding utf16
 
-target/wasm/release/build/gen/gen.component.wasm: target/wasm/release/build/gen/gen.embedded.wasm
+target/wasm/debug/build/gen/gen.component.wasm: target/wasm/debug/build/gen/gen.embedded.wasm
 	wasm-tools component new $< -o $@
 
-target/wasm/release/build/gen/gen.component.wat: target/wasm/release/build/gen/gen.component.wasm
+target/wasm/debug/build/gen/gen.component.wat: target/wasm/debug/build/gen/gen.component.wasm
 	wasm-tools print $< > $@
 
-main: target/wasm/release/build/gen/gen.component.wasm
+main: target/wasm/debug/build/gen/gen.component.wasm
 	python3 -m wasmtime.bindgen $< --out-dir $@
 
 clean:

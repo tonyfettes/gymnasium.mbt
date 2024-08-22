@@ -4,7 +4,7 @@ from typing import Any, List, Tuple, Optional
 import wasmtime
 import numpy
 
-from main.imports.gymnasium import Discrete
+from main.imports.gymnasium import Bytes, Discrete, LunarLander
 
 
 class HostGymnasium(imports.HostGymnasium):
@@ -25,7 +25,10 @@ class HostGymnasium(imports.HostGymnasium):
         if desc is not None:
             desc_str = [d.decode("utf-16") for d in desc]
         env: gym.Env[gym.spaces.Discrete, gym.spaces.Discrete] = gym.make(
-            "FrozenLake-v1", render_mode=render_mode_str, is_slippery=is_slippery, desc=desc_str
+            "FrozenLake-v1",
+            render_mode=render_mode_str,
+            is_slippery=is_slippery,
+            desc=desc_str,
         )
         self.environments.append(env)
         action_space_id = len(self.spaces)
@@ -59,6 +62,37 @@ class HostGymnasium(imports.HostGymnasium):
 
     def discrete_sample(self, discrete: Discrete) -> int:
         return self.spaces[discrete.id].sample().item()
+
+    def lunar_lander_make(self, render_mode: bytes) -> LunarLander:
+        env_id = len(self.environments)
+        render_mode_str = render_mode.decode("utf-16")
+        env: gym.Env[gym.spaces.Discrete, gym.spaces.Box] = gym.make(
+            "LunarLander-v2", render_mode=render_mode_str
+        )
+        self.environments.append(env)
+        action_space_id = len(self.spaces)
+        self.spaces.append(env.action_space)
+        observation_space_id = len(self.spaces)
+        self.spaces.append(env.observation_space)
+        return LunarLander(
+            id=env_id,
+            action_space=Discrete(id=action_space_id, n=env.action_space.n),  # type: ignore
+            observation_space=imports.gymnasium.Box(
+                id=observation_space_id, shape=list(env.observation_space.shape)  # type: ignore
+            ),
+        )
+
+    def lunar_lander_reset(self, env: LunarLander, seed: int | None) -> List[float]:
+        observation, _ = self.environments[env.id].reset(seed=seed)
+        return observation
+
+    def lunar_lander_step(
+        self, env: LunarLander, action: int
+    ) -> Tuple[List[float], float, bool]:
+        observation, reward, terminated, truncated, _ = self.environments[env.id].step(
+            action
+        )
+        return observation, float(reward), terminated or truncated
 
 
 class HostPython(imports.HostPython):

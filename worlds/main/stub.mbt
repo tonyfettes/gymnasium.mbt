@@ -85,7 +85,10 @@ fn max[T : Compare](array : Array[T]) -> T {
   max_value
 }
 
-fn random_sample(random_state: @random.RandomState, array : Array[Double]) -> Int {
+fn random_sample(
+  random_state : @random.RandomState,
+  array : Array[Double]
+) -> Int {
   let mut sum = 0.0
   for value in array {
     sum = sum + value
@@ -237,7 +240,7 @@ pub fn power(base : Double, exp : Int) -> Double {
   result
 }
 
-pub fn run() -> Unit {
+pub fn train_frozen_lake() -> Unit {
   let map = [
     "SFFFFFFF", "FFFFFFFF", "FFFHFFFF", "FFFFFHFF", "FFFHFFFF", "FHHFFFHF", "FHFFHFHF",
     "FFFHFFFG",
@@ -265,4 +268,96 @@ pub fn run() -> Unit {
       }
     }
   }
+}
+
+struct DQN {
+  layers : @torch.Sequential
+  learning_rate : Double
+  discount_factor : Double
+  log_probs : Array[@torch.Value]
+  rewards : Array[Double]
+}
+
+pub fn DQN::new(
+  ~observation_space : Int,
+  ~action_space : Int,
+  ~learning_rate : Double,
+  ~discount_factor : Double
+) -> DQN {
+  let layers = @torch.Sequential::new(
+    [
+      @torch.Linear::new(observation_space, 128),
+      @torch.ReLU::new(),
+      @torch.Linear::new(128, 128),
+      @torch.ReLU::new(),
+      @torch.Linear::new(128, action_space),
+      @torch.Softmax::new(),
+    ],
+  )
+  DQN::{ layers, learning_rate, discount_factor, log_probs: [], rewards: [] }
+}
+
+pub fn DQN::sample_action(self : DQN, state : Array[Double]) -> UInt {
+  let distrib = self.layers.forward(@torch.Tensor::val(state))
+  let action = distrib.sample()
+  self.log_probs.push(distrib[action])
+  action.to_uint()
+}
+
+pub fn DQN::update_reward(
+  self : DQN,
+  _state : Array[Double],
+  reward : Double
+) -> Unit {
+  self.rewards.push(reward)
+}
+
+pub fn DQN::back_propagate(self : DQN) -> Double {
+  let mut cumulative_reward = 0.0
+  let deltas = []
+  self.rewards.rev_inplace()
+  for reward in self.rewards {
+    cumulative_reward = reward + self.discount_factor * cumulative_reward
+    deltas.push(cumulative_reward)
+  }
+  deltas.rev_inplace()
+  let mut loss = @torch.Value::val(0.0)
+  for i = 0; i < deltas.length(); i = i + 1 {
+    loss = loss - self.log_probs[i] * @torch.Value::val(deltas[i])
+  }
+  loss.backward(self.learning_rate * loss.value)
+  self.log_probs.clear()
+  self.rewards.clear()
+  return loss.value
+}
+
+pub fn train_lunar_lander() -> Unit {
+  let env = @gymnasium.lunar_lander_make("human".to_bytes())
+  let agent = DQN::new(
+    observation_space=env.observation_space.shape[0].to_int(),
+    action_space=env.action_space.n.to_int(),
+    learning_rate=0.01,
+    discount_factor=0.95,
+  )
+  for episode = 0; episode < 100; episode = episode + 1 {
+    let state = @gymnasium.lunar_lander_reset(env, None)
+    loop state {
+      state => {
+        let action = agent.sample_action(Array::from_fixed_array(state))
+        let (state, reward, terminated) = @gymnasium.lunar_lander_step(env, action)
+        agent.update_reward(Array::from_fixed_array(state), reward)
+        if terminated {
+          break
+        }
+        continue state
+      }
+    }
+    let loss = agent.back_propagate()
+    debug("loss", loss)
+  }
+}
+
+pub fn run() -> Unit {
+  train_frozen_lake |> ignore
+  train_lunar_lander()
 }

@@ -20,6 +20,11 @@ interface gymnasium {
 
   discrete-sample: func(discrete: discrete) -> u32;
 
+  record box {
+    id: u32,
+    shape: list<u32>,
+  }
+
   record frozen-lake {
     id: u32,
     action-space: discrete,
@@ -37,9 +42,10 @@ interface gymnasium {
   record lunar-lander {
     id: u32,
     action-space: discrete,
+    observation-space: box,
   }
 
-  lunar-lander-make: func(render-mode: bytes) -> u32;
+  lunar-lander-make: func(render-mode: bytes) -> lunar-lander;
   lunar-lander-reset: func(env: lunar-lander, seed: option<u32>) -> list<f64>;
   lunar-lander-step: func(env: lunar-lander, action: u32) -> tuple<list<f64>, f64, bool>;
 }

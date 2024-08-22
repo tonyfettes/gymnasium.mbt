@@ -5,6 +5,11 @@ pub struct Discrete {
   n : UInt
 } derive(Show, Eq)
 
+pub struct Box {
+  id : UInt
+  shape : FixedArray[UInt]
+} derive(Show, Eq)
+
 pub struct FrozenLake {
   id : UInt
   action_space : Discrete
@@ -18,6 +23,7 @@ pub struct FrozenLakeInfo {
 pub struct LunarLander {
   id : UInt
   action_space : Discrete
+  observation_space : Box
 } derive(Show, Eq)
 
 pub fn discrete_sample(discrete : Discrete) -> UInt {
@@ -130,13 +136,27 @@ pub fn frozen_lake_step(
   )
 }
 
-pub fn lunar_lander_make(render_mode : Bytes) -> UInt {
-  let result : Int = wasmImportLunarLanderMake(
+pub fn lunar_lander_make(render_mode : Bytes) -> LunarLander {
+  let return_area = @ffi.malloc(24)
+  wasmImportLunarLanderMake(
     @ffi.bytes2ptr(render_mode),
     render_mode.length(),
+    return_area,
   )
+  let result = @ffi.ptr2uint_array(@ffi.load32(return_area + 16))
   ignore(render_mode)
-  return result.to_uint()
+  @ffi.free(return_area)
+  return LunarLander::{
+    id: @ffi.load32(return_area + 0).to_uint(),
+    action_space: Discrete::{
+      id: @ffi.load32(return_area + 4).to_uint(),
+      n: @ffi.load32(return_area + 8).to_uint(),
+    },
+    observation_space: Box::{
+      id: @ffi.load32(return_area + 12).to_uint(),
+      shape: result,
+    },
+  }
 }
 
 pub fn lunar_lander_reset(
@@ -152,11 +172,15 @@ pub fn lunar_lander_reset(
     env.id.to_int(),
     env.action_space.id.to_int(),
     env.action_space.n.to_int(),
+    env.observation_space.id.to_int(),
+    @ffi.uint_array2ptr(env.observation_space.shape),
+    env.observation_space.shape.length(),
     lowered,
     lowered3,
     return_area,
   )
   let result = @ffi.ptr2double_array(@ffi.load32(return_area + 0))
+  ignore(env.observation_space.shape)
   @ffi.free(return_area)
   return result
 }
@@ -170,10 +194,14 @@ pub fn lunar_lander_step(
     env.id.to_int(),
     env.action_space.id.to_int(),
     env.action_space.n.to_int(),
+    env.observation_space.id.to_int(),
+    @ffi.uint_array2ptr(env.observation_space.shape),
+    env.observation_space.shape.length(),
     action.to_int(),
     return_area,
   )
   let result = @ffi.ptr2double_array(@ffi.load32(return_area + 0))
+  ignore(env.observation_space.shape)
   @ffi.free(return_area)
   return (
     result,
