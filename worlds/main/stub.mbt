@@ -1,3 +1,5 @@
+let rand : @random.Rand = @random.new()
+
 enum EpsilonPolicy {
   Explore
   Exploit
@@ -13,11 +15,8 @@ fn Epsilon::new(value : Double, ~bias : Double = 0, ~decay : Double) -> Epsilon 
   Epsilon::{ value, bias, decay }
 }
 
-fn Epsilon::sample(
-  self : Epsilon,
-  random_state : @random.RandomState
-) -> EpsilonPolicy {
-  if @random.gen_double(random_state) < self.value {
+fn Epsilon::sample(self : Epsilon) -> EpsilonPolicy {
+  if rand.double() < self.value {
     EpsilonPolicy::Explore
   } else {
     EpsilonPolicy::Exploit
@@ -30,7 +29,6 @@ fn Epsilon::update(self : Epsilon) -> Unit {
 
 struct Q {
   action_space : Int
-  random_state : @random.RandomState
   table : Array[Array[Double]]
   epsilon : Epsilon
   learning_rate : Double
@@ -41,19 +39,16 @@ struct Q {
 fn Q::new(
   ~observation_space : Int,
   ~action_space : Int,
-  ~seed : Int,
   ~epsilon : Epsilon,
   ~learning_rate : Double,
   ~discount_factor : Double
 ) -> Q {
-  let random_state = @random.init_state(~seed)
   let table = Array::makei(
     observation_space,
     fn(_i) { Array::make(action_space, 0.5) },
   )
   let trajectory = []
   Q::{
-    random_state,
     action_space,
     table,
     epsilon,
@@ -85,15 +80,12 @@ fn max[T : Compare](array : Array[T]) -> T {
   max_value
 }
 
-fn random_sample(
-  random_state : @random.RandomState,
-  array : Array[Double]
-) -> Int {
+fn random_sample(array : Array[Double]) -> Int {
   let mut sum = 0.0
   for value in array {
     sum = sum + value
   }
-  let mut random_value = @random.gen_double(random_state) / 2.0 * sum
+  let mut random_value = rand.double() * sum
   for i, value in array {
     random_value = random_value - value
     if random_value < 0 {
@@ -104,12 +96,10 @@ fn random_sample(
 }
 
 fn Q::sample_action(self : Q, state : Int) -> UInt {
-  // let action = match self.epsilon.sample(self.random_state) {
-  //   EpsilonPolicy::Explore =>
-  //     (@random.gen_int(self.random_state) % self.action_space).to_uint()
-  //   EpsilonPolicy::Exploit => argmax(self.table[state]).to_uint()
-  // }
-  let action = random_sample(self.random_state, self.table[state]).to_uint()
+  let action = match self.epsilon.sample() {
+    EpsilonPolicy::Explore => rand.int(limit=self.action_space).to_uint()
+    EpsilonPolicy::Exploit => argmax(self.table[state]).to_uint()
+  }
   self.trajectory.push((state, action))
   return action
 }
@@ -148,8 +138,8 @@ fn Q::update_reward(self : Q, state : Int, reward : Double) -> Unit {
   self.print_trajectory(state)
   loop self.trajectory[:], state {
     [(origin, action), .. as trajectory], state => {
-      self.table[origin][action.to_int()] = self.table[origin][action.to_int()] +
-        self.learning_rate *
+      // bellman equantion
+      self.table[origin][action.to_int()] += self.learning_rate *
         (
           reward +
           self.discount_factor * max(self.table[state]) -
@@ -241,15 +231,11 @@ pub fn power(base : Double, exp : Int) -> Double {
 }
 
 pub fn train_frozen_lake() -> Unit {
-  let map = [
-    "SFFFFFFF", "FFFFFFFF", "FFFHFFFF", "FFFFFHFF", "FFFHFFFF", "FHHFFFHF", "FHFFHFHF",
-    "FFFHFFFG",
-  ]
+  let map = ["SFFF", "FHFH", "FFFH", "HFFG"]
   let env = ForzenLake::new(render_mode="human", is_slippery=false, ~map)
   let agent = Q::new(
     observation_space=env.observation_space().n.to_int(),
     action_space=env.action_space().n.to_int(),
-    seed=43,
     epsilon=Epsilon::new(1.0, decay=1.0 - power(0.5, map.length())),
     learning_rate=1.0,
     discount_factor=0.95,
@@ -286,11 +272,9 @@ pub fn DQN::new(
 ) -> DQN {
   let layers = @torch.Sequential::new(
     [
-      @torch.Linear::new(observation_space, 128),
+      @torch.Linear::new(observation_space, 16),
       @torch.ReLU::new(),
-      @torch.Linear::new(128, 128),
-      @torch.ReLU::new(),
-      @torch.Linear::new(128, action_space),
+      @torch.Linear::new(16, action_space),
       @torch.Softmax::new(),
     ],
   )
@@ -298,9 +282,11 @@ pub fn DQN::new(
 }
 
 pub fn DQN::sample_action(self : DQN, state : Array[Double]) -> UInt {
-  let distrib = self.layers.forward(@torch.Tensor::val(state))
+  let value = self.layers.forward(@torch.Tensor::val(state))
+  let distrib = @torch.Categorical::new(value)
   let action = distrib.sample()
-  self.log_probs.push(distrib[action])
+  let log_prob : @torch.Value = distrib[action].log() - @torch.Value::val(1.0)
+  self.log_probs.push(log_prob)
   action.to_uint()
 }
 
@@ -321,31 +307,62 @@ pub fn DQN::back_propagate(self : DQN) -> Double {
     deltas.push(cumulative_reward)
   }
   deltas.rev_inplace()
+  debug("log_probs", self.log_probs)
+  debug("deltas", deltas)
   let mut loss = @torch.Value::val(0.0)
   for i = 0; i < deltas.length(); i = i + 1 {
-    loss = loss - self.log_probs[i] * @torch.Value::val(deltas[i])
+    loss += - self.log_probs[i] * @torch.Value::val(deltas[i])
   }
   loss.backward(self.learning_rate * loss.value)
+  @python.print("\{self.layers}".to_bytes())
   self.log_probs.clear()
   self.rewards.clear()
   return loss.value
 }
 
+pub struct LunarLander {
+  env : @gymnasium.LunarLander
+}
+
+pub fn LunarLander::new(~render_mode : String) -> LunarLander {
+  LunarLander::{ env: @gymnasium.lunar_lander_make(render_mode.to_bytes()) }
+}
+
+pub fn LunarLander::observation_space(self : LunarLander) -> @gymnasium.Box {
+  self.env.observation_space
+}
+
+pub fn LunarLander::action_space(self : LunarLander) -> @gymnasium.Discrete {
+  self.env.action_space
+}
+
+pub fn LunarLander::reset(self : LunarLander, seed : UInt?) -> Array[Double] {
+  Array::from_fixed_array(@gymnasium.lunar_lander_reset(self.env, seed))
+}
+
+pub fn LunarLander::step(
+  self : LunarLander,
+  action : UInt
+) -> (Array[Double], Double, Bool) {
+  let (state, reward, terminated) = self.env
+    |> @gymnasium.lunar_lander_step(action)
+  (Array::from_fixed_array(state), reward, terminated)
+}
+
 pub fn train_lunar_lander() -> Unit {
-  let env = @gymnasium.lunar_lander_make("human".to_bytes())
+  let env = LunarLander::new(render_mode="human")
   let agent = DQN::new(
-    observation_space=env.observation_space.shape[0].to_int(),
-    action_space=env.action_space.n.to_int(),
-    learning_rate=0.01,
+    observation_space=env.observation_space().shape[0].to_int(),
+    action_space=env.action_space().n.to_int(),
+    learning_rate=1.0e-5,
     discount_factor=0.95,
   )
   for episode = 0; episode < 100; episode = episode + 1 {
-    let state = @gymnasium.lunar_lander_reset(env, None)
-    loop state {
+    loop env.reset(None) {
       state => {
-        let action = agent.sample_action(Array::from_fixed_array(state))
-        let (state, reward, terminated) = @gymnasium.lunar_lander_step(env, action)
-        agent.update_reward(Array::from_fixed_array(state), reward)
+        let action = agent.sample_action(state)
+        let (state, reward, terminated) = env.step(action)
+        agent.update_reward(state, reward)
         if terminated {
           break
         }

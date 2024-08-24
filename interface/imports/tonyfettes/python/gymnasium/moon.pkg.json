@@ -1,1 +1,7 @@
-{ "import": [{ "path" : "tonyfettes/python/ffi", "alias" : "ffi" }] }
+{ "import": [
+    {
+      "path": "tonyfettes/python/ffi",
+      "alias": "ffi"
+    },
+    "tonyfettes/python/interface/imports/tonyfettes/python/python"
+  ] }
