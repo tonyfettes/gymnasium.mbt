@@ -285,7 +285,7 @@ pub fn DQN::sample_action(self : DQN, state : Array[Double]) -> UInt {
   let value = self.layers.forward(@torch.Tensor::val(state))
   let distrib = @torch.Categorical::new(value)
   let action = distrib.sample()
-  let log_prob : @torch.Value = distrib[action].log() - @torch.Value::val(1.0)
+  let log_prob = distrib.log_prob(action)
   self.log_probs.push(log_prob)
   action.to_uint()
 }
@@ -313,7 +313,7 @@ pub fn DQN::back_propagate(self : DQN) -> Double {
   for i = 0; i < deltas.length(); i = i + 1 {
     loss += - self.log_probs[i] * @torch.Value::val(deltas[i])
   }
-  loss.backward(self.learning_rate * loss.value)
+  loss.backward(self.learning_rate)
   @python.print("\{self.layers}".to_bytes())
   self.log_probs.clear()
   self.rewards.clear()
@@ -354,10 +354,10 @@ pub fn train_lunar_lander() -> Unit {
   let agent = DQN::new(
     observation_space=env.observation_space().shape[0].to_int(),
     action_space=env.action_space().n.to_int(),
-    learning_rate=1.0e-5,
+    learning_rate=1.0e-4,
     discount_factor=0.95,
   )
-  for episode = 0; episode < 100; episode = episode + 1 {
+  for episode = 0; episode < 10000; episode = episode + 1 {
     loop env.reset(None) {
       state => {
         let action = agent.sample_action(state)
