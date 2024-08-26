@@ -80,21 +80,6 @@ fn max[T : Compare](array : Array[T]) -> T {
   max_value
 }
 
-fn random_sample(array : Array[Double]) -> Int {
-  let mut sum = 0.0
-  for value in array {
-    sum = sum + value
-  }
-  let mut random_value = rand.double() * sum
-  for i, value in array {
-    random_value = random_value - value
-    if random_value < 0 {
-      return i
-    }
-  }
-  abort("Invalid random value")
-}
-
 fn Q::sample_action(self : Q, state : Int) -> UInt {
   let action = match self.epsilon.sample() {
     EpsilonPolicy::Explore => rand.int(limit=self.action_space).to_uint()
@@ -273,6 +258,8 @@ pub fn DQN::new(
   let layers = @torch.Sequential::new(
     [
       @torch.Linear::new(observation_space, 16),
+      @torch.ReLU::new(),
+      @torch.Linear::new(16, 16),
       @torch.ReLU::new(),
       @torch.Linear::new(16, action_space),
       @torch.Softmax::new(),
